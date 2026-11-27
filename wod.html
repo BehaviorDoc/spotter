@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14181f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spotter WOD">
+<title>Spotter WOD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Same gym-floor look as Spotter: camera mirror behind a giant gym clock and rep count, controls in a bottom tray. Single dark theme by choice: it lives on a phone propped against a box. */
+:root{
+  --rubber:#14181f; --rubber-2:#1d232d; --rubber-3:#2a3240;
+  --chalk:#eef1f4; --chalk-dim:#9aa4b2;
+  --plate:#e5483b; --plate-ink:#fff;
+  --good:#5cc98a; --warn:#f0b43c; --rest:#4aa3df;
+  --f-num:"Barlow Condensed","Arial Narrow",Impact,system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--rubber);color:var(--chalk);font-family:var(--f-body);font-size:15px;-webkit-tap-highlight-color:transparent;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+[hidden]{display:none!important}
+
+.app{position:fixed;inset:0;display:flex;flex-direction:column}
+.stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+video,canvas.overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.mirror video,.mirror canvas.overlay{transform:scaleX(-1)}
+.stage.nocam{background:repeating-linear-gradient(90deg,transparent 0 62px,rgba(255,255,255,.025) 62px 64px),var(--rubber)}
+
+.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;gap:8px;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px))}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.chip{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;background:rgba(20,24,31,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--chalk-dim)}
+.dot.ok{background:var(--good)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--plate)}
+.iconbtn{pointer-events:auto;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(20,24,31,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px}
+.tr{display:flex;gap:8px}
+
+.clock{align-self:center;text-align:center;background:rgba(20,24,31,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:14px;padding:4px 18px 8px;border:1px solid rgba(255,255,255,.08)}
+.clock .t{font-family:var(--f-num);font-weight:800;font-size:min(16vw,64px);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.clock .t.hot{color:var(--plate)}
+.clock .s{font-family:var(--f-num);font-weight:600;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim)}
+.clock.rest .t{color:var(--rest)}
+.clock.countdown .t{color:var(--warn)}
+
+.count{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-shadow:0 4px 30px rgba(0,0,0,.6);min-height:0}
+.count .n{font-family:var(--f-num);font-weight:800;font-size:min(38vw,26vh);line-height:.85;font-variant-numeric:tabular-nums;letter-spacing:-.02em;transition:transform .12s ease,color .2s}
+.count .n small{font-size:.38em;color:var(--chalk-dim);letter-spacing:0}
+.count .n.bump{transform:scale(1.08);color:var(--plate)}
+.count .mv{font-family:var(--f-num);font-weight:800;font-size:30px;letter-spacing:.04em;text-transform:uppercase;margin-top:6px}
+.count .note{font-size:14px;color:var(--chalk-dim);font-weight:600}
+.count .msg{font-family:var(--f-num);font-weight:800;font-size:min(14vw,56px);letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.bottomhud{display:grid;gap:8px}
+.next{align-self:center;justify-self:center;background:rgba(20,24,31,.72);padding:6px 14px;border-radius:8px;font-size:14px;font-weight:600;color:var(--chalk-dim)}
+.next b{color:var(--chalk)}
+.next:empty{display:none}
+.progress{max-width:520px;width:100%;margin:0 auto;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;position:relative}
+.progress .fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--chalk);border-radius:4px;transition:width .2s linear}
+.cue{justify-self:center;font-family:var(--f-num);font-weight:600;font-size:20px;letter-spacing:.06em;text-transform:uppercase;background:rgba(20,24,31,.72);padding:6px 14px;border-radius:8px}
+.cue:empty{display:none}
+
+/* Builder / home screen */
+.home{position:absolute;inset:0;overflow:auto;background:repeating-linear-gradient(90deg,transparent 0 62px,rgba(255,255,255,.025) 62px 64px),var(--rubber);
+  padding:calc(env(safe-area-inset-top,0px) + 22px) max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.home .inner{max-width:560px;margin:0 auto;display:grid;gap:18px}
+.home h1{font-family:var(--f-num);font-weight:800;font-size:52px;line-height:.9;margin:0;letter-spacing:.01em;text-transform:uppercase}
+.home h1 span{color:var(--plate)}
+.home p.lede{margin:0;color:var(--chalk-dim);line-height:1.5}
+h3.lbl{margin:0;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim)}
+.presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.preset{text-align:left;border:1px solid var(--rubber-3);background:var(--rubber-2);border-radius:12px;padding:10px 12px;display:grid;gap:2px}
+.preset b{font-family:var(--f-num);font-size:20px;letter-spacing:.03em;text-transform:uppercase}
+.preset span{font-size:12px;color:var(--chalk-dim);line-height:1.35}
+.preset[aria-pressed="true"]{border-color:var(--plate);box-shadow:inset 0 0 0 1px var(--plate)}
+
+.card{background:var(--rubber-2);border:1px solid var(--rubber-3);border-radius:14px;padding:14px;display:grid;gap:14px}
+.field{display:grid;gap:6px}
+.field>label,.field>.fl{font-weight:600}
+.hint{font-size:13px;color:var(--chalk-dim);line-height:1.4}
+.seg{display:flex;border:1px solid var(--rubber-3);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--rubber);padding:10px 4px;font-weight:600;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--chalk);color:var(--rubber)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input[type=text],input[type=number],select,textarea{background:var(--rubber);border:1px solid var(--rubber-3);border-radius:10px;padding:10px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:84px;line-height:1.4}
+.moves{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.moves li{display:grid;grid-template-columns:1fr 92px 36px;gap:6px;align-items:center}
+.moves li .note{grid-column:1 / 3}
+.moves li .del{width:36px;height:40px;border-radius:10px;border:1px solid var(--rubber-3);background:var(--rubber);font-size:18px;color:var(--chalk-dim)}
+.moves li .badge{grid-column:3;font-size:10px;text-align:center;color:var(--chalk-dim);letter-spacing:.06em;text-transform:uppercase}
+.moves li+li{border-top:1px solid var(--rubber-3);padding-top:8px}
+
+.btn{flex:1;border:0;border-radius:12px;font-family:var(--f-num);font-weight:800;font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:0 14px;min-height:48px}
+.btn.primary{background:var(--plate);color:var(--plate-ink)}
+.btn.ghost{background:var(--rubber);border:1px solid var(--rubber-3);flex:0 0 auto}
+.btn.big{min-height:60px;font-size:24px}
+.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px;align-items:stretch}
+.linkbtn{background:none;border:0;color:var(--chalk-dim);text-decoration:underline;padding:4px 0;justify-self:start}
+.err{color:var(--warn);line-height:1.45}
+
+.tray{background:var(--rubber-2);border-top:1px solid var(--rubber-3);
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:10px}
+.tray .row .btn{min-height:56px}
+.tray .tap{flex:2}
+
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.sheet .panel{width:100%;max-width:560px;max-height:88%;overflow:auto;background:var(--rubber-2);border-radius:18px 18px 0 0;
+  padding:18px max(18px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:grid;gap:16px}
+.panel h2{margin:0;font-family:var(--f-num);font-weight:800;font-size:26px;letter-spacing:.03em;text-transform:uppercase}
+.panel .hd{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.score{font-family:var(--f-num);font-weight:800;font-size:54px;line-height:1;font-variant-numeric:tabular-nums}
+.score small{display:block;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim);font-weight:600;margin-top:6px}
+.list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.list li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:baseline;padding:10px 12px;border-radius:10px;background:var(--rubber)}
+.list .nm{font-weight:600}
+.list .rp{font-family:var(--f-num);font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.list .sub{grid-column:1 / -1;font-size:12px;color:var(--chalk-dim)}
+.list li button{grid-column:1 / -1;justify-self:start}
+.empty{color:var(--chalk-dim);padding:10px 0}
+.toggle{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.toggle input{width:22px;height:22px;accent-color:var(--plate)}
+
+.toast{position:fixed;left:50%;bottom:calc(160px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--chalk);color:var(--rubber);
+  font-weight:600;padding:10px 16px;border-radius:10px;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:calc(100% - 32px);text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage mirror nocam" id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas class="overlay" id="overlay"></canvas>
+
+    <div class="hud" id="hud" hidden>
+      <div class="topbar">
+        <span class="chip" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Tap mode</span></span>
+        <div class="tr">
+          <button class="iconbtn" id="voiceBtn" aria-label="Voice on" title="Voice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path id="voiceWave" d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+          </button>
+          <button class="iconbtn" id="flipBtn" aria-label="Switch camera" title="Switch camera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 13a3 3 0 0 0 5.2 2"/><path d="M15 13a3 3 0 0 0-5.2-2"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="clock" id="clock"><div class="t" id="clockT">0:00</div><div class="s" id="clockS">AMRAP 20</div></div>
+      <div class="count" id="countBox">
+        <div class="n" id="repNum">0</div>
+        <div class="mv" id="mvName">Air squat</div>
+        <div class="note" id="mvNote"></div>
+      </div>
+      <div class="bottomhud">
+        <div class="cue" id="cue"></div>
+        <div class="next" id="nextUp"></div>
+        <div class="progress" aria-hidden="true"><div class="fill" id="progFill"></div></div>
+      </div>
+    </div>
+
+    <div class="home" id="home">
+      <div class="inner">
+        <div>
+          <h1>Spot<span>ter</span> WOD</h1>
+        </div>
+        <p class="lede">Runs the clock, counts your reps from the phone camera, and calls out rounds and time. Nothing leaves your phone.</p>
+
+        <h3 class="lbl">Pick a workout</h3>
+        <div class="presets" id="presets"></div>
+
+        <h3 class="lbl">Today's WOD</h3>
+        <div class="card">
+          <div class="field">
+            <label for="pasteBox">Paste from the whiteboard (optional)</label>
+            <textarea id="pasteBox" placeholder="AMRAP 12&#10;10 burpees&#10;15 wall balls 20/14&#10;200 m run"></textarea>
+            <div class="row"><button class="btn ghost" id="parseBtn" style="flex:1">Read it</button></div>
+            <div class="hint" id="parseHint">Understands AMRAP, EMOM, For Time, rounds, 21-15-9 ladders, time caps and Tabata.</div>
+          </div>
+          <div class="field">
+            <label for="wName">Name</label>
+            <input type="text" id="wName" maxlength="40">
+          </div>
+          <div class="field">
+            <span class="fl">Format</span>
+            <div class="seg" id="fmtSeg">
+              <button data-v="amrap">AMRAP</button><button data-v="fortime">For Time</button><button data-v="emom">EMOM</button><button data-v="tabata">Tabata</button>
+            </div>
+          </div>
+          <div class="grid2" id="fmtFields"></div>
+          <div class="field">
+            <span class="fl">Movements</span>
+            <ul class="moves" id="moves"></ul>
+            <button class="linkbtn" id="addMove">+ Add movement</button>
+            <div class="hint">"Cam" moves are counted by the camera. Everything else gets a big tap button.</div>
+          </div>
+          <div class="field">
+            <span class="fl">Scaling</span>
+            <div class="seg" id="scaleSeg">
+              <button data-v="Rx">Rx</button><button data-v="Scaled">Scaled</button><button data-v="Foundations">Foundations</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="err" id="err" hidden></div>
+        <button class="btn primary big" id="startCam">Start with camera</button>
+        <button class="btn ghost" id="startTap" style="min-height:48px">Start without camera (tap to count)</button>
+        <div class="row"><button class="btn ghost" id="histBtn" style="flex:1">History</button><button class="btn ghost" id="setBtn" style="flex:1">Settings</button></div>
+        <p class="hint" style="margin:0">Prop the phone 6 to 10 ft away so your whole body is in frame. Side-on works best for squats, burpees, swings and push-ups.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tray" id="tray" hidden>
+    <div class="row">
+      <button class="btn ghost" id="minusBtn" aria-label="Remove a rep">−1</button>
+      <button class="btn primary tap" id="tapBtn">+1 rep</button>
+      <button class="btn ghost" id="doneBtn">Done</button>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="pauseBtn" style="flex:1">Pause</button>
+      <button class="btn ghost" id="endBtn" style="flex:1">End WOD</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="resSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="resTitle">
+    <div class="hd"><h2 id="resTitle">Result</h2><button class="btn ghost" id="resDone">Done</button></div>
+    <div class="score" id="resScore"></div>
+    <ul class="list" id="resList"></ul>
+    <div class="field"><label for="resNote">Notes (weights, how it felt)</label><input type="text" id="resNote" maxlength="120"></div>
+    <div class="row"><button class="btn ghost" id="resCopy" style="flex:1">Copy result</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="histSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <div class="hd"><h2 id="histTitle">History</h2><button class="btn ghost" data-close>Done</button></div>
+    <ul class="list" id="histList"></ul>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="hd"><h2 id="setTitle">Settings</h2><button class="btn ghost" data-close>Done</button></div>
+    <div class="field">
+      <span class="fl">Range of motion required</span>
+      <div class="seg" id="strictSeg">
+        <button data-v="easy">Forgiving</button><button data-v="normal">Standard</button><button data-v="strict">Strict</button>
+      </div>
+      <div class="hint">Strict only counts reps that hit full range of motion, like a judge would.</div>
+    </div>
+    <div class="field">
+      <label for="voiceSel">Voice</label>
+      <select id="voiceSel"></select>
+    </div>
+    <label class="toggle"><span>Say every rep number</span><input type="checkbox" id="sayReps" checked></label>
+    <label class="toggle"><span>Clock beeps (3, 2, 1, go)</span><input type="checkbox" id="beeps" checked></label>
+    <label class="toggle"><span>Form cues ("go deeper", "lock out")</span><input type="checkbox" id="cues" checked></label>
+    <label class="toggle"><span>Show skeleton</span><input type="checkbox" id="skel" checked></label>
+    <a class="linkbtn" href="index.html">Open the lifting rep counter</a>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<!--COUNTER-START-->
+<script>
+/* Rep counter shared with Spotter (index.html), extended with CrossFit movements.
+   A rep = leave the "top" zone, reach the "bottom" zone, come back to "top". */
+const L = {nose:0, lSh:11, rSh:12, lEl:13, rEl:14, lWr:15, rWr:16, lHip:23, rHip:24, lKn:25, rKn:26, lAn:27, rAn:28};
+
+function angleAt(a, b, c){
+  const abx=a.x-b.x, aby=a.y-b.y, cbx=c.x-b.x, cby=c.y-b.y;
+  const dot=abx*cbx+aby*cby, m=Math.hypot(abx,aby)*Math.hypot(cbx,cby);
+  if(!m) return null;
+  return Math.acos(Math.max(-1,Math.min(1,dot/m)))*180/Math.PI;
+}
+const vis = p => (p && (p.visibility==null ? 1 : p.visibility)) || 0;
+
+function sideAngle(lm, left, right, minVis){
+  const sides=[left,right].map(ix=>{
+    const v=Math.min(vis(lm[ix[0]]),vis(lm[ix[1]]),vis(lm[ix[2]]));
+    return {v, a: angleAt(lm[ix[0]],lm[ix[1]],lm[ix[2]])};
+  }).filter(s=>s.a!=null && s.v>=minVis);
+  if(!sides.length) return null;
+  if(sides.length===2 && Math.min(sides[0].v,sides[1].v)>0.75) return (sides[0].a+sides[1].a)/2;
+  return sides.sort((x,y)=>y.v-x.v)[0].a;
+}
+
+/* Torso uprightness as an angle-like value: 180 = standing tall, 90 = lying flat (burpee chest to floor). */
+function torsoUpright(lm){
+  const pick=(s,h)=>({v:Math.min(vis(lm[s]),vis(lm[h])), s:lm[s], h:lm[h]});
+  const best=[pick(L.lSh,L.lHip),pick(L.rSh,L.rHip)].filter(p=>p.v>=0.5).sort((a,b)=>b.v-a.v)[0];
+  if(!best) return null;
+  const dx=best.s.x-best.h.x, dy=best.s.y-best.h.y, len=Math.hypot(dx,dy);
+  if(!len) return null;
+  const incl=Math.acos(Math.max(-1,Math.min(1,-dy/len)))*180/Math.PI; // 0 = shoulders straight above hips
+  return 180-Math.min(90,incl);
+}
+
+const KNEE=[[L.lHip,L.lKn,L.lAn],[L.rHip,L.rKn,L.rAn]], ELBOW=[[L.lSh,L.lEl,L.lWr],[L.rSh,L.rEl,L.rWr]], HIP=[[L.lSh,L.lHip,L.lKn],[L.rSh,L.rHip,L.rKn]];
+const EXERCISES = {
+  squat:   {name:"Squat",      joints:KNEE,  top:160, bottom:{easy:115,normal:100,strict:88},  labels:["Stand","Parallel"], tips:{shallow:"Go deeper",lock:"Stand all the way up"}, setup:"Side-on, full body in frame"},
+  pushup:  {name:"Push-up",    joints:ELBOW, top:150, bottom:{easy:110,normal:95,strict:80},   labels:["Arms long","Chest down"], tips:{shallow:"Lower your chest",lock:"Lock out"}, setup:"Side-on, low camera"},
+  press:   {name:"Press",      joints:ELBOW, top:155, bottom:{easy:105,normal:90,strict:75},   labels:["Lockout","Rack"], tips:{shallow:"Bring it to your shoulders",lock:"Press to lockout"}, setup:"Facing the camera"},
+  curl:    {name:"Curl",       joints:ELBOW, top:145, bottom:{easy:75,normal:60,strict:48},    labels:["Arms down","Squeeze"], tips:{shallow:"Curl higher",lock:"All the way down"}, setup:"Facing the camera"},
+  pullup:  {name:"Pull-up",    joints:ELBOW, top:145, bottom:{easy:95,normal:80,strict:65},    labels:["Dead hang","Chin over"], tips:{shallow:"Pull higher",lock:"Full hang"}, setup:"Facing the camera, bar in frame"},
+  deadlift:{name:"Deadlift",   joints:HIP,   top:162, bottom:{easy:125,normal:110,strict:95},  labels:["Lockout","Hinge"], tips:{shallow:"Hinge lower",lock:"Squeeze glutes, lock out"}, setup:"Side-on, full body in frame"},
+  lunge:   {name:"Lunge",      joints:KNEE,  top:158, bottom:{easy:118,normal:105,strict:95},  labels:["Stand","Knee down"], tips:{shallow:"Drop the back knee",lock:"Stand tall"}, setup:"Side-on, full body in frame", useMin:true},
+  situp:   {name:"Sit-up",     joints:HIP,   top:120, bottom:{easy:75,normal:65,strict:55},    labels:["Lying","Up"], tips:{shallow:"Sit all the way up",lock:"Back down"}, setup:"Side-on, low camera"},
+  /* CrossFit additions */
+  thruster:{name:"Thruster",   joints:KNEE,  top:160, bottom:{easy:115,normal:100,strict:88},  labels:["Stand","Squat"], tips:{shallow:"Hip crease below the knee",lock:"Finish tall"}, setup:"Side-on, full body in frame"},
+  wallball:{name:"Wall ball",  joints:KNEE,  top:160, bottom:{easy:115,normal:100,strict:88},  labels:["Stand","Squat"], tips:{shallow:"Squat deeper",lock:"Drive up and throw"}, setup:"Side-on to the wall, full body in frame"},
+  kbswing: {name:"KB swing",   joints:HIP,   top:162, bottom:{easy:135,normal:125,strict:115}, labels:["Hips open","Hinge"], tips:{shallow:"Hinge back more",lock:"Snap the hips open"}, setup:"Side-on, full body in frame", minGap:700},
+  burpee:  {name:"Burpee",     metric:torsoUpright, top:150, bottom:{easy:125,normal:115,strict:105}, labels:["Standing","Chest down"], tips:{shallow:"Chest to the floor",lock:"Stand all the way up"}, setup:"Side-on, whole body in frame, camera low", minGap:1200},
+  t2b:     {name:"Toes-to-bar",joints:HIP,   top:155, bottom:{easy:110,normal:90,strict:70},   labels:["Hang","Toes up"], tips:{shallow:"Toes higher",lock:"Back to a full hang"}, setup:"Side-on, bar and feet in frame", minGap:700},
+  hspu:    {name:"HSPU",       joints:ELBOW, top:155, bottom:{easy:105,normal:90,strict:75},   labels:["Lockout","Head down"], tips:{shallow:"Head to the mat",lock:"Lock out"}, setup:"Side-on to the wall"},
+  clean:   {name:"Clean",      joints:HIP,   top:165, bottom:{easy:125,normal:110,strict:95},  labels:["Stand","Floor"], tips:{shallow:"Bar to the floor",lock:"Stand it up"}, setup:"Side-on, full body in frame", minGap:1500}
+};
+
+class RepCounter {
+  constructor(ex, strict){ this.setExercise(ex, strict); }
+  setExercise(ex, strict){
+    this.ex = EXERCISES[ex]; this.key = ex; if(strict) this.strict = strict; if(!this.strict) this.strict="normal";
+    this.reset();
+  }
+  reset(){
+    this.count=0; this.phase="top"; this.smoothed=null; this.minInRep=999;
+    this.lastRepAt=-1e9; this.armed=false; this.events=[]; this.lastSeenAt=0; this.stallSince=null;
+  }
+  get bottom(){ return this.ex.bottom[this.strict]; }
+  measure(lm){
+    const ex=this.ex;
+    if(ex.metric) return ex.metric(lm);
+    if(ex.useMin){
+      const ok=ex.joints.map(ix=>[angleAt(lm[ix[0]],lm[ix[1]],lm[ix[2]]), ix])
+        .filter(([v,ix])=>v!=null && Math.min(vis(lm[ix[0]]),vis(lm[ix[1]]),vis(lm[ix[2]]))>=0.5).map(x=>x[0]);
+      return ok.length ? Math.min(...ok) : null;
+    }
+    return sideAngle(lm, ex.joints[0], ex.joints[1], 0.5);
+  }
+  /* Returns depth 0..1. Pushes events: {type:"rep"|"shallow"|"lockout"} */
+  update(lm, t){
+    this.events.length=0;
+    if(!this.ex) return {angle:null, depth:null, visible:false};
+    const a = lm ? this.measure(lm) : null;
+    if(a==null) return {angle:null, depth:null, visible:false};
+    this.lastSeenAt=t;
+    this.smoothed = this.smoothed==null ? a : this.smoothed*0.55 + a*0.45;
+    const s=this.smoothed, top=this.ex.top, bot=this.bottom;
+    if(!this.armed){ if(s>=top) this.armed=true; else return {angle:s, depth:this.depth(s), visible:true}; }
+    if(this.phase==="top"){
+      if(s < top-12){ this.phase="moving"; this.minInRep=s; }
+    } else if(this.phase==="moving"){
+      this.minInRep=Math.min(this.minInRep,s);
+      if(s<=bot){ this.phase="bottom"; }
+      else if(s>=top){
+        if(this.minInRep < top-25) this.events.push({type:"shallow"});
+        this.phase="top";
+      }
+    } else if(this.phase==="bottom"){
+      this.minInRep=Math.min(this.minInRep,s);
+      if(s>=top){
+        if(t-this.lastRepAt > (this.ex.minGap||350)){ this.count++; this.lastRepAt=t; this.events.push({type:"rep", n:this.count}); }
+        this.phase="top";
+      } else if(s>bot+20 && this.stallSince==null){ this.stallSince=t; }
+      if(s<=bot+20) this.stallSince=null;
+      if(this.stallSince!=null && t-this.stallSince>2500){ this.events.push({type:"lockout"}); this.stallSince=t+100000; }
+    }
+    return {angle:s, depth:this.depth(s), visible:true};
+  }
+  depth(s){ const top=this.ex.top, bot=this.bottom; return Math.max(0,Math.min(1,(top-s)/(top-bot))); }
+}
+if(typeof module!=="undefined") module.exports=Object.assign(module.exports||{},{RepCounter,EXERCISES,angleAt,torsoUpright});
+</script>
+<!--COUNTER-END-->
+
+<!--WOD-START-->
+<script>
+/* WOD engine: pure logic, no DOM. Times are milliseconds from any monotonic clock. */
+const MOVES = {
+  airsquat: {name:"Air squat",   ex:"squat",   unit:"reps"},
+  pushup:   {name:"Push-up",     ex:"pushup",  unit:"reps"},
+  situp:    {name:"Sit-up",      ex:"situp",   unit:"reps"},
+  pullup:   {name:"Pull-up",     ex:"pullup",  unit:"reps"},
+  burpee:   {name:"Burpee",      ex:"burpee",  unit:"reps"},
+  wallball: {name:"Wall ball",   ex:"wallball",unit:"reps"},
+  thruster: {name:"Thruster",    ex:"thruster",unit:"reps"},
+  kbswing:  {name:"KB swing",    ex:"kbswing", unit:"reps"},
+  t2b:      {name:"Toes-to-bar", ex:"t2b",     unit:"reps"},
+  deadlift: {name:"Deadlift",    ex:"deadlift",unit:"reps"},
+  clean:    {name:"Clean",       ex:"clean",   unit:"reps"},
+  snatch:   {name:"Snatch",      ex:"clean",   unit:"reps"},
+  press:    {name:"Push press",  ex:"press",   unit:"reps"},
+  hspu:     {name:"HSPU",        ex:"hspu",    unit:"reps"},
+  lunge:    {name:"Lunge",       ex:"lunge",   unit:"reps"},
+  boxjump:  {name:"Box jump",    ex:null,      unit:"reps"},
+  du:       {name:"Double-under",ex:null,      unit:"reps"},
+  su:       {name:"Single-under",ex:null,      unit:"reps"},
+  mu:       {name:"Muscle-up",   ex:null,      unit:"reps"},
+  c2b:      {name:"Chest-to-bar",ex:null,      unit:"reps"},
+  dbsnatch: {name:"DB snatch",   ex:null,      unit:"reps"},
+  run:      {name:"Run",         ex:null,      unit:"m"},
+  row:      {name:"Row",         ex:null,      unit:"cal"},
+  bike:     {name:"Bike",        ex:null,      unit:"cal"},
+  ski:      {name:"Ski",         ex:null,      unit:"cal"},
+  other:    {name:"Other",       ex:null,      unit:"reps"}
+};
+const UNIT_LABEL = {reps:"", m:" m", cal:" cal"};
+const unitOf = m => (m && m.unit) || MOVES[m.move].unit;
+
+/* Words a whiteboard might use, matched longest first. */
+const ALIASES = [
+  ["toes to bar","t2b"],["toes-to-bar","t2b"],["t2b","t2b"],["ttb","t2b"],
+  ["chest to bar","c2b"],["chest-to-bar","c2b"],["c2b","c2b"],
+  ["handstand push","hspu"],["hspu","hspu"],
+  ["double under","du"],["double-under","du"],["dus","du"],["du","du"],
+  ["single under","su"],["single-under","su"],
+  ["muscle up","mu"],["muscle-up","mu"],
+  ["wall ball","wallball"],["wallball","wallball"],["wb","wallball"],
+  ["kettlebell swing","kbswing"],["kb swing","kbswing"],["swing","kbswing"],
+  ["box jump","boxjump"],["box jump over","boxjump"],
+  ["db snatch","dbsnatch"],["dumbbell snatch","dbsnatch"],
+  ["air squat","airsquat"],["squat","airsquat"],
+  ["push-up","pushup"],["push up","pushup"],["pushup","pushup"],
+  ["push press","press"],["shoulder press","press"],["press","press"],["jerk","press"],
+  ["sit-up","situp"],["sit up","situp"],["situp","situp"],["abmat","situp"],
+  ["pull-up","pullup"],["pull up","pullup"],["pullup","pullup"],
+  ["burpee","burpee"],["thruster","thruster"],["deadlift","deadlift"],
+  ["power clean","clean"],["squat clean","clean"],["clean","clean"],
+  ["power snatch","snatch"],["snatch","snatch"],
+  ["lunge","lunge"],["run","run"],["row","row"],["bike","bike"],["assault","bike"],["echo","bike"],["ski","ski"]
+].sort((a,b)=>b[0].length-a[0].length);
+
+const PRESETS = [
+  {name:"Cindy", blurb:"AMRAP 20 · 5 pull-ups, 10 push-ups, 15 squats", format:"amrap", minutes:20,
+    movements:[{move:"pullup",reps:5},{move:"pushup",reps:10},{move:"airsquat",reps:15}]},
+  {name:"Fran", blurb:"21-15-9 thrusters and pull-ups", format:"fortime", ladder:[21,15,9], cap:10,
+    movements:[{move:"thruster",reps:0,note:"95/65 lb"},{move:"pullup",reps:0}]},
+  {name:"Karen", blurb:"150 wall balls for time", format:"fortime", rounds:1, cap:15,
+    movements:[{move:"wallball",reps:150,note:"20/14 lb"}]},
+  {name:"Burpee EMOM", blurb:"EMOM 10 · 10 burpees", format:"emom", minutes:10, emomEach:"all",
+    movements:[{move:"burpee",reps:10}]},
+  {name:"Swing & squat EMOM", blurb:"EMOM 12 alternating swings and squats", format:"emom", minutes:12, emomEach:"alt",
+    movements:[{move:"kbswing",reps:15,note:"53/35 lb"},{move:"airsquat",reps:20}]},
+  {name:"Tabata squats", blurb:"8 × 20 s on, 10 s off", format:"tabata", work:20, rest:10, sets:8,
+    movements:[{move:"airsquat",reps:0}]},
+  {name:"Chipper", blurb:"For time · 50-40-30-20-10", format:"fortime", rounds:1, cap:25,
+    movements:[{move:"wallball",reps:50},{move:"kbswing",reps:40},{move:"t2b",reps:30},{move:"burpee",reps:20},{move:"run",reps:400}]},
+  {name:"5 rounds", blurb:"5 RFT · 400 m run, 15 swings, 12 burpees", format:"fortime", rounds:5, cap:30,
+    movements:[{move:"run",reps:400},{move:"kbswing",reps:15},{move:"burpee",reps:12}]}
+];
+
+function clampInt(v, lo, hi, d){ v=parseInt(v,10); if(!isFinite(v)) return d; return Math.max(lo, Math.min(hi, v)); }
+function normalizeWod(w){
+  w = w || {};
+  const format = ["amrap","fortime","emom","tabata"].includes(w.format) ? w.format : "amrap";
+  const ladder = Array.isArray(w.ladder) ? w.ladder.map(n=>clampInt(n,1,999,0)).filter(Boolean) : [];
+  const movements = (w.movements||[]).filter(m=>m && MOVES[m.move]).map(m=>{
+    const o={move:m.move, reps:clampInt(m.reps,0,99999,0), note:String(m.note||"").slice(0,40)};
+    if(["reps","m","cal"].includes(m.unit) && m.unit!==MOVES[m.move].unit) o.unit=m.unit;
+    // Without a ladder every movement needs a rep target, or the round could never end.
+    if(!o.reps && !ladder.length && format!=="tabata") o.reps=1;
+    return o;
+  });
+  return {
+    name: String(w.name||"").slice(0,40) || {amrap:"AMRAP",fortime:"For Time",emom:"EMOM",tabata:"Tabata"}[format],
+    format, movements, ladder,
+    minutes: clampInt(w.minutes,1,120,format==="emom"?10:12),
+    cap: clampInt(w.cap,0,120,0),
+    rounds: ladder.length || clampInt(w.rounds,1,100,1),
+    emomEach: w.emomEach==="alt" ? "alt" : "all",
+    work: clampInt(w.work,5,600,20), rest: clampInt(w.rest,0,600,10), sets: clampInt(w.sets,1,50,8),
+    scale: ["Rx","Scaled","Foundations"].includes(w.scale) ? w.scale : "Rx"
+  };
+}
+function fmtClock(sec){
+  sec=Math.max(0,Math.floor(sec)); const h=Math.floor(sec/3600), m=Math.floor(sec/60)%60, s=sec%60;
+  return (h? h+":"+String(m).padStart(2,"0") : m)+":"+String(s).padStart(2,"0");
+}
+function describeWod(w){
+  w=normalizeWod(w);
+  if(w.format==="amrap") return `AMRAP ${w.minutes}`;
+  if(w.format==="emom") return `EMOM ${w.minutes}`+(w.emomEach==="alt" && w.movements.length>1?" (alternating)":"");
+  if(w.format==="tabata") return `Tabata ${w.work}/${w.rest} × ${w.sets}`;
+  const r = w.ladder.length ? w.ladder.join("-") : (w.rounds>1? `${w.rounds} rounds` : "");
+  return ["For time", r, w.cap? `cap ${w.cap}`:""].filter(Boolean).join(" · ");
+}
+
+/* Parse whiteboard text into a WOD. Returns {wod, unknown:[lines it skipped]}. */
+function parseWod(text){
+  const lines=String(text||"").split(/\n|;|,(?![^(]*\))/).map(s=>s.trim()).filter(Boolean);
+  const all=lines.join(" ").toLowerCase();
+  const w={movements:[]}, unknown=[];
+  let m;
+  if((m=all.match(/\bamrap\s*(?:in\s*)?(\d+)|(\d+)\s*(?:min(?:ute)?s?\s*)?amrap/))) { w.format="amrap"; w.minutes=+(m[1]||m[2]); }
+  else if((m=all.match(/\b(?:e(?:m|1m)om|every\s*minute(?:\s*on\s*the\s*minute)?)(?:\s*(?:x|for)?\s*(\d+))?|(\d+)\s*(?:min(?:ute)?s?\s*)?emom/))) { w.format="emom"; w.minutes=+(m[1]||m[2]||10); if(/alternat|odd|even|min(?:ute)?\s*1\s*:/.test(all)) w.emomEach="alt"; }
+  else if(/tabata/.test(all)) { w.format="tabata"; }
+  else { w.format="fortime"; }
+  if((m=all.match(/(\d+)\s*(?:rounds?|rft)\b/))) w.rounds=+m[1];
+  if((m=all.match(/\b(\d+(?:\s*-\s*\d+){1,9})\b(?!\s*(?:lb|kg|#|in|"|cal|m\b))/))) {
+    const parts=m[1].split(/\s*-\s*/).map(Number);
+    // A ladder like 21-15-9; skip weight pairs like 95-65 written as two numbers.
+    if(parts.length>=3 || (parts.length===2 && parts[0]!==parts[1] && !/\b(lb|kg)/.test(all.slice(m.index, m.index+m[0].length+6)))) w.ladder=parts;
+  }
+  if((m=all.match(/(?:time\s*)?cap(?:ped)?\s*(?:of|at|:)?\s*(\d+)|(\d+)\s*(?:min(?:ute)?s?)?\s*(?:time\s*)?cap/))) w.cap=+(m[1]||m[2]);
+  if(w.format==="tabata"){ w.work=20; w.rest=10; w.sets=8; }
+  for(const raw of lines){
+    const line=raw.toLowerCase().replace(/^(?:min(?:ute)?\s*\d+\s*:|odd\s*:|even\s*:|\d+\)\s*|[-*•]\s*)/,"").trim();
+    const alias=ALIASES.find(([a])=>new RegExp("(^|[^a-z])"+a.replace(/[-]/g,"[- ]?")+"(s|es)?([^a-z]|$)").test(line));
+    if(!alias){ if(!/amrap|emom|tabata|round|for time|rft|cap|every|minute|^\d+(\s*-\s*\d+)+$/.test(line)) unknown.push(raw); continue; }
+    const move=alias[1];
+    let reps=0;
+    const num=line.match(/^(\d+)\s*(m\b|meters?|cal(?:orie)?s?)?/) || line.match(/(\d+)\s*(m\b|meters?|cal(?:orie)?s?|reps?)/);
+    if(num) reps=+num[1];
+    let unit;
+    if(/\bmiles?\b/.test(line)){ unit="m"; reps=Math.round((reps||1)*1609); }
+    else if(num && /^(m|meter)/.test(num[2]||"")) unit="m";
+    else if(num && /^cal/.test(num[2]||"")) unit="cal";
+    const note=(line.match(/\d+\s*\/\s*\d+\s*(?:lb|kg|#|in|"|')?|\d+\s*(?:lb|kg|#)/)||[""])[0].replace(/\s+/g,"");
+    w.movements.push(unit ? {move, reps, note, unit} : {move, reps, note});
+  }
+  if(w.format!=="tabata" && !w.ladder) w.movements.forEach(mv=>{ if(!mv.reps) mv.reps=unitOf(mv)==="m"?400:10; });
+  return {wod: normalizeWod(w), unknown};
+}
+
+class WodRun {
+  constructor(wod){
+    this.wod = normalizeWod(wod);
+    this.phase = "idle";            // idle | countdown | running | done
+    this.paused = false; this.pausedMs = 0; this.pauseStart = 0;
+    this.events = [];
+    this.round = 1; this.idx = 0; this.reps = 0; this.roundReps = 0;
+    this.perMove = this.wod.movements.map(()=>0);
+    this.splits = [];
+    this.minute = -1; this.minuteDone = false; this.minutesDone = 0; this.missed = [];
+    this.interval = -1; this.intervalReps = [];
+    this.finishedAt = null; this.reason = null;
+    this.spoken = new Set();
+  }
+  clock(t){ return (this.paused ? this.pauseStart : t) - this.pausedMs; }
+  elapsed(t){ return this.goAt==null ? 0 : (this.clock(t) - this.goAt)/1000; }
+  get duration(){ const w=this.wod;
+    if(w.format==="amrap"||w.format==="emom") return w.minutes*60;
+    if(w.format==="tabata") return (w.work+w.rest)*w.sets*w.movements.length - w.rest;
+    return w.cap ? w.cap*60 : null; }
+  start(t, countdown=10){ this.phase = countdown ? "countdown" : "running"; this.goAt = t + countdown*1000; this.events=[]; if(!countdown) this._go(); return this.events; }
+  pause(t){ if(this.paused || this.phase==="done" || this.phase==="idle") return; this.paused=true; this.pauseStart=t; }
+  resume(t){ if(!this.paused) return; this.pausedMs += t - this.pauseStart; this.paused=false; }
+
+  target(){ const w=this.wod, m=w.movements[this.currentIndex()];
+    if(!m) return 0;
+    if(w.format==="tabata") return 0;
+    if(w.ladder.length && !m.reps) return w.ladder[Math.min(this.round, w.ladder.length)-1];
+    return m.reps; }
+  currentIndex(){ const w=this.wod;
+    if(w.format==="emom") return w.emomEach==="alt" ? Math.max(0,this.minute) % w.movements.length : this.idx;
+    if(w.format==="tabata") return Math.min(w.movements.length-1, Math.floor(Math.max(0,this.interval)/w.sets));
+    return this.idx; }
+  current(){ const i=this.currentIndex(), m=this.wod.movements[i]; return m ? Object.assign({index:i, target:this.target(), done:this.reps}, MOVES[m.move], m) : null; }
+  next(){ const w=this.wod;
+    if(w.format==="tabata"){ const i=Math.floor((this.interval+1)/w.sets); return w.movements[i] ? {move:w.movements[i].move, reps:0} : null; }
+    if(w.format==="emom"){
+      if(w.emomEach==="alt") return w.movements.length>1 && this.minute+1<w.minutes ? {move:w.movements[(this.minute+1)%w.movements.length].move, reps:w.movements[(this.minute+1)%w.movements.length].reps} : null;
+      if(this.idx+1<w.movements.length) return w.movements[this.idx+1];
+      return null;
+    }
+    let i=this.idx+1, r=this.round;
+    if(i>=w.movements.length){ i=0; r++; if(w.format==="fortime" && r>w.rounds) return null; }
+    const m=w.movements[i]; const reps = (w.ladder.length && !m.reps) ? w.ladder[Math.min(r,w.ladder.length)-1] : m.reps;
+    return {move:m.move, reps, round:r, unit:m.unit};
+  }
+  _emit(e){ this.events.push(e); }
+  _once(key, e){ if(this.spoken.has(key)) return; this.spoken.add(key); this._emit(e); }
+  _go(){ this.phase="running"; this._emit({type:"go"});
+    if(this.wod.format==="emom"){ this.minute=0; this.minuteDone=false; this.idx=0; this.reps=0; }
+    if(this.wod.format==="tabata"){ this.interval=0; this.intervalReps=[0]; this._emit({type:"interval", kind:"work", n:1}); }
+    this._emit({type:"move", move:this.current()}); }
+  _finish(reason, t){ if(this.phase==="done") return; this.phase="done"; this.reason=reason; this.finishedAt=this.elapsed(t); this._emit({type:"done", reason, score:this.score()}); }
+
+  /* Call often (each animation frame is fine). Returns events since last call. */
+  tick(t){
+    this.events=[];
+    if(this.paused || this.phase==="idle" || this.phase==="done") return this.events;
+    const e=this.elapsed(t);
+    if(this.phase==="countdown"){
+      const left=Math.ceil(-e);
+      if(left<=3 && left>=1) this._once("cd"+left, {type:"beep", kind:"short", n:left});
+      if(e>=0){ this._once("cd0",{type:"beep", kind:"long"}); this._go(); }
+      return this.events;
+    }
+    const w=this.wod, dur=this.duration;
+    if(w.format==="emom"){
+      const min=Math.floor(e/60);
+      const inMin=e-min*60;
+      if(inMin>=57 && min<w.minutes) this._once("eb"+min+"-"+Math.floor(inMin), {type:"beep", kind:"short", n:60-Math.floor(inMin)});
+      if(min!==this.minute){
+        if(!this.minuteDone) this.missed.push(this.minute+1);
+        if(min>=w.minutes){ this._finish("time", t); return this.events; }
+        this.minute=min; this.minuteDone=false; this.idx=0; this.reps=0;
+        this._emit({type:"beep", kind:"long"}); this._emit({type:"minute", n:min+1, of:w.minutes}); this._emit({type:"move", move:this.current()});
+      }
+      return this.events;
+    }
+    if(w.format==="tabata"){
+      const cyc=w.work+w.rest, total=w.sets*w.movements.length;
+      const k=Math.floor(e/cyc), within=e-k*cyc;
+      if(k>=total || (k===total-1 && within>=w.work)){ this._finish("time", t); return this.events; }
+      const kind = within<w.work ? "work" : "rest";
+      const toNext = kind==="work" ? w.work-within : cyc-within;
+      if(toNext<=3) this._once("tb"+k+kind+Math.ceil(toNext), {type:"beep", kind:"short", n:Math.ceil(toNext)});
+      if(k!==this.interval){ const prevMove=this.currentIndex(); this.interval=k; this.intervalReps[k]=0; this.reps=0;
+        this._emit({type:"beep", kind:"long"}); this._emit({type:"interval", kind:"work", n:(k%w.sets)+1});
+        if(this.currentIndex()!==prevMove) this._emit({type:"move", move:this.current()}); }
+      else if(kind==="rest" && !this.spoken.has("rest"+k)){ this.spoken.add("rest"+k); this._emit({type:"beep", kind:"long"}); this._emit({type:"interval", kind:"rest", n:(k%w.sets)+1, reps:this.intervalReps[k]}); }
+      return this.events;
+    }
+    // AMRAP and For Time
+    if(dur){
+      const left=dur-e;
+      if(left<=0){ this._finish(w.format==="amrap"?"time":"cap", t); return this.events; }
+      if(dur>=240) { const half=Math.round(dur/2); if(left<=half && left>half-2) this._once("half",{type:"say", text:"Halfway."}); }
+      for(const s of [600,300,120,60,30,10]){ if(dur>s+20 && left<=s && left>s-2) this._once("left"+s,{type:"say", text:s>=60? `${s/60} minute${s===60?"":"s"} left.` : `${s} seconds.`}); }
+      const c=Math.ceil(left); if(c<=3) this._once("end"+c,{type:"beep", kind:"short", n:c});
+    } else {
+      const m=Math.floor(e/60); if(m>0 && m%5===0 && e-m*60<2) this._once("min"+m,{type:"say", text:`${m} minutes.`});
+    }
+    return this.events;
+  }
+
+  /* Count reps (camera or tap). Returns events. */
+  addReps(t, n=1){
+    this.events=[];
+    if(this.phase!=="running" || this.paused) return this.events;
+    const w=this.wod;
+    if(w.format==="tabata"){
+      const e=this.elapsed(t), cyc=w.work+w.rest, within=e-Math.floor(e/cyc)*cyc;
+      if(within>=w.work) return this.events;
+      this.intervalReps[this.interval]=(this.intervalReps[this.interval]||0)+n; this.reps+=n;
+      this.perMove[this.currentIndex()]+=n;
+      this._emit({type:"rep", n:this.reps}); return this.events;
+    }
+    if(w.format==="emom" && this.minuteDone) { this._emit({type:"resting"}); return this.events; }
+    let left=n;
+    while(left>0 && this.phase==="running"){
+      const tgt=this.target(), need=tgt-this.reps, take=Math.min(need,left);
+      this.reps+=take; this.roundReps+=take; this.perMove[this.currentIndex()]+=take; left-=take;
+      const unit=unitOf(w.movements[this.currentIndex()]);
+      if(unit==="reps" && take>0) this._emit({type:"rep", n:this.reps, left:tgt-this.reps});
+      if(this.reps>=tgt) this._advance(t); else break;
+    }
+    return this.events;
+  }
+  /* Finish the current movement in one tap (runs, rows, or "no-rep, I'm done"). */
+  completeMovement(t){
+    this.events=[];
+    if(this.phase!=="running" || this.paused || this.wod.format==="tabata") return this.events;
+    if(this.wod.format==="emom" && this.minuteDone) return this.events;
+    const need=this.target()-this.reps;
+    if(need>0) return this.addReps(t, need);
+    this._advance(t); return this.events;
+  }
+  undoRep(){ if(this.reps>0){ this.reps--; this.roundReps=Math.max(0,this.roundReps-1); this.perMove[this.currentIndex()]--; if(this.wod.format==="tabata") this.intervalReps[this.interval]--; return true; } return false; }
+
+  _advance(t){
+    const w=this.wod;
+    if(w.format==="emom"){
+      if(w.emomEach==="all" && this.idx+1<w.movements.length){ this.idx++; this.reps=0; this._emit({type:"move", move:this.current()}); return; }
+      this.minuteDone=true; this.minutesDone++;
+      const rest=Math.max(0, Math.round(60-(this.elapsed(t)-this.minute*60)));
+      this._emit({type:"set-done", rest}); return;
+    }
+    this.idx++; this.reps=0;
+    if(this.idx>=w.movements.length){
+      this.idx=0; this.splits.push(this.elapsed(t)); this.roundReps=0;
+      if(w.format==="fortime" && this.round>=w.rounds){ this._finish("finished", t); return; }
+      this.round++; this._emit({type:"round", n:this.round, done:this.round-1});
+    }
+    this._emit({type:"move", move:this.current()});
+  }
+
+  score(){
+    const w=this.wod;
+    if(w.format==="amrap") return {text:`${this.round-1} + ${this.roundReps}`, long:`${this.round-1} rounds + ${this.roundReps} reps`};
+    if(w.format==="fortime"){
+      if(this.reason==="finished") return {text:fmtClock(this.finishedAt), long:`Finished in ${fmtClock(this.finishedAt)}`};
+      const reps=this.perMove.reduce((a,b)=>a+b,0);
+      return {text:`CAP + ${reps}`, long:`${this.reason==="cap"?"Time capped":"Stopped"} with ${reps} reps done (round ${this.round})`};
+    }
+    if(w.format==="emom") return {text:`${this.minutesDone}/${w.minutes}`, long:`${this.minutesDone} of ${w.minutes} minutes completed`+(this.missed.length?` · missed minute ${this.missed.join(", ")}`:"")};
+    const per=w.movements.map((m,i)=>{ const arr=this.intervalReps.slice(i*w.sets,(i+1)*w.sets).map(x=>x||0); while(arr.length<w.sets) arr.push(0); return Math.min(...arr); });
+    const low=per.reduce((a,b)=>a+b,0), tot=this.intervalReps.reduce((a,b)=>a+(b||0),0);
+    return {text:String(low), long:`Lowest-round score ${low} · ${tot} total reps`};
+  }
+  view(t){
+    const w=this.wod, e=this.elapsed(t), dur=this.duration;
+    const v={phase:this.phase, paused:this.paused, clock:"0:00", sub:"", rest:false, hot:false, progress:0};
+    if(this.phase==="countdown"){ v.clock=String(Math.max(1,Math.ceil(-e))); v.sub="Get ready"; return v; }
+    const ee = this.phase==="done" && this.finishedAt!=null ? this.finishedAt : e;
+    if(w.format==="amrap"){ v.clock=fmtClock(dur-ee); v.sub=`Round ${this.round} · AMRAP ${w.minutes}`; v.hot=dur-ee<=10; v.progress=ee/dur; }
+    else if(w.format==="fortime"){ v.clock=fmtClock(ee); v.sub=`Round ${Math.min(this.round,w.rounds)} of ${w.rounds}`+(w.cap?` · cap ${w.cap}`:""); v.hot=!!dur && dur-ee<=10;
+      const total=w.movements.reduce((a,m,i)=>a+(()=>{let s=0;for(let r=1;r<=w.rounds;r++) s+=(w.ladder.length&&!m.reps)?w.ladder[r-1]:m.reps; return s;})(),0);
+      v.progress = total ? this.perMove.reduce((a,b)=>a+b,0)/total : 0; }
+    else if(w.format==="emom"){ const inMin=ee-Math.max(0,this.minute)*60; v.clock=fmtClock(60-inMin); v.sub=`Minute ${Math.min(this.minute+1,w.minutes)} of ${w.minutes}`; v.rest=this.minuteDone; v.hot=60-inMin<=3; v.progress=inMin/60; }
+    else { const cyc=w.work+w.rest, k=Math.max(0,this.interval), within=ee-k*cyc, work=within<w.work;
+      v.clock=fmtClock(work? w.work-within : cyc-within); v.rest=!work; v.sub=`${work?"Work":"Rest"} · round ${(k%w.sets)+1} of ${w.sets}`; v.progress=work? within/w.work : (within-w.work)/Math.max(1,w.rest); }
+    v.progress=Math.max(0,Math.min(1,v.progress||0));
+    return v;
+  }
+  summary(){
+    return this.wod.movements.map((m,i)=>({name:MOVES[m.move].name, unit:unitOf(m), total:this.perMove[i], note:m.note}));
+  }
+}
+if(typeof module!=="undefined") module.exports=Object.assign(module.exports||{},{WodRun,normalizeWod,parseWod,describeWod,fmtClock,MOVES,PRESETS});
+</script>
+<!--WOD-END-->
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem("spotterwod."+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k,v){ try{ localStorage.setItem("spotterwod."+k, JSON.stringify(v)); }catch(e){} }
+};
+const state = {
+  wod: normalizeWod(store.get("draft", PRESETS[0])), presetIdx: store.get("preset", 0),
+  strict: store.get("strict","normal"), voice: store.get("voice",true), voiceName: store.get("voiceName",""),
+  sayReps: store.get("sayReps",true), beeps: store.get("beeps",true), cues: store.get("cues",true), skel: store.get("skel",true),
+  facing:"user", camera:false, run:null, lastResult:null
+};
+const counter = new RepCounter(null, state.strict);
+
+/* ---------- Sound ---------- */
+let voices=[];
+function loadVoices(){
+  voices=(speechSynthesis.getVoices()||[]).filter(v=>/^en/i.test(v.lang));
+  const sel=$("voiceSel"); sel.innerHTML="";
+  const def=document.createElement("option"); def.value=""; def.textContent="Phone default"; sel.append(def);
+  voices.forEach(v=>{ const o=document.createElement("option"); o.value=v.name; o.textContent=v.name+" ("+v.lang+")"; sel.append(o); });
+  sel.value=state.voiceName;
+}
+if("speechSynthesis" in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+function say(text,{interrupt=true,rate=1.15}={}){
+  if(!state.voice || !("speechSynthesis" in window)) return;
+  if(interrupt) speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.rate=rate; u.volume=1;
+  const v=voices.find(v=>v.name===state.voiceName); if(v) u.voice=v;
+  speechSynthesis.speak(u);
+}
+let actx;
+function unlockAudio(){ try{ actx = actx || new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(e){} }
+function beep(kind){
+  if(!state.beeps || !actx) return;
+  const o=actx.createOscillator(), g=actx.createGain(), t=actx.currentTime, len=kind==="long"?0.6:0.15;
+  o.type="square"; o.frequency.value = kind==="long" ? 880 : 660;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.25,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+len);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t+len+0.02);
+}
+const WORDS=["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+const spoken = n => n<=10 ? WORDS[n] : String(n);
+const moveLine = m => !m ? "" : (m.unit==="reps" ? (m.target? `${m.target} ${plural(m.name, m.target)}` : m.name) : `${m.target}${m.unit==="m"?" meter":" calorie"} ${m.name.toLowerCase()}`);
+function plural(name,n){ if(n===1) return name.toLowerCase(); const l=name.toLowerCase(); if(/hspu$/.test(l)) return "handstand push-ups"; if(/toes-to-bar|chest-to-bar$/.test(l)) return l; if(/(sh|ch|x|s)$/.test(l)) return l+"es"; return l+"s"; }
+
+/* ---------- Builder ---------- */
+function renderPresets(){
+  const box=$("presets"); box.innerHTML="";
+  PRESETS.forEach((p,i)=>{
+    const b=document.createElement("button"); b.className="preset"; b.setAttribute("aria-pressed", String(i===state.presetIdx));
+    const nm=document.createElement("b"); nm.textContent=p.name; const bl=document.createElement("span"); bl.textContent=p.blurb;
+    b.append(nm,bl);
+    b.onclick=()=>{ state.presetIdx=i; store.set("preset",i); state.wod=normalizeWod(Object.assign({scale:state.wod.scale},p)); saveDraft(); renderBuilder(); };
+    box.append(b);
+  });
+}
+function saveDraft(){ store.set("draft", state.wod); }
+function numField(label, key, min, max, hint){
+  const f=document.createElement("div"); f.className="field";
+  const l=document.createElement("label"); l.textContent=label; l.htmlFor="f_"+key;
+  const i=document.createElement("input"); i.type="number"; i.inputMode="numeric"; i.id="f_"+key; i.min=min; i.max=max; i.value=state.wod[key];
+  i.onchange=()=>{ state.wod[key]=+i.value; state.wod=normalizeWod(state.wod); markCustom(); i.value=state.wod[key]; saveDraft(); };
+  f.append(l,i); if(hint){ const h=document.createElement("div"); h.className="hint"; h.textContent=hint; f.append(h); }
+  return f;
+}
+function markCustom(){ state.presetIdx=-1; store.set("preset",-1); document.querySelectorAll(".preset").forEach(b=>b.setAttribute("aria-pressed","false")); }
+function renderBuilder(){
+  const w=state.wod;
+  $("wName").value=w.name;
+  document.querySelectorAll("#fmtSeg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===w.format)));
+  document.querySelectorAll("#scaleSeg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===w.scale)));
+  const ff=$("fmtFields"); ff.innerHTML="";
+  if(w.format==="amrap") ff.append(numField("Minutes","minutes",1,120));
+  if(w.format==="emom"){
+    ff.append(numField("Minutes","minutes",1,120));
+    const f=document.createElement("div"); f.className="field"; const l=document.createElement("label"); l.textContent="Each minute"; l.htmlFor="f_each";
+    const s=document.createElement("select"); s.id="f_each"; [["all","Do every movement"],["alt","Alternate movements"]].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; s.append(o); });
+    s.value=w.emomEach; s.onchange=()=>{ w.emomEach=s.value; markCustom(); saveDraft(); }; f.append(l,s); ff.append(f);
+  }
+  if(w.format==="fortime"){
+    const lf=document.createElement("div"); lf.className="field"; const ll=document.createElement("label"); ll.textContent="Rounds or ladder"; ll.htmlFor="f_ladder";
+    const li=document.createElement("input"); li.type="text"; li.id="f_ladder"; li.placeholder="5 or 21-15-9"; li.value = w.ladder.length ? w.ladder.join("-") : String(w.rounds);
+    li.onchange=()=>{ const parts=li.value.split(/[^0-9]+/).filter(Boolean).map(Number);
+      if(parts.length>1){ w.ladder=parts; } else { w.ladder=[]; w.rounds=parts[0]||1; }
+      state.wod=normalizeWod(w); markCustom(); saveDraft(); renderBuilder(); };
+    const lh=document.createElement("div"); lh.className="hint"; lh.textContent="With a ladder, set a movement's reps to 0 to follow it.";
+    lf.append(ll,li,lh); ff.append(lf);
+    ff.append(numField("Time cap (min, 0 = none)","cap",0,120));
+  }
+  if(w.format==="tabata"){ ff.append(numField("Work (sec)","work",5,600)); ff.append(numField("Rest (sec)","rest",0,600)); ff.append(numField("Rounds per movement","sets",1,50)); }
+  const ul=$("moves"); ul.innerHTML="";
+  w.movements.forEach((m,i)=>{
+    const li=document.createElement("li");
+    const sel=document.createElement("select"); sel.setAttribute("aria-label","Movement "+(i+1));
+    Object.entries(MOVES).forEach(([k,mv])=>{ const o=document.createElement("option"); o.value=k; o.textContent=mv.name+(mv.ex?"  · cam":""); sel.append(o); });
+    sel.value=m.move; sel.onchange=()=>{ m.move=sel.value; delete m.unit; markCustom(); saveDraft(); renderBuilder(); };
+    const reps=document.createElement("input"); reps.type="number"; reps.inputMode="numeric"; reps.min=0; reps.value=m.reps; reps.setAttribute("aria-label", "Reps for movement "+(i+1));
+    reps.placeholder = w.format==="tabata" ? "max" : "reps";
+    if(w.format==="tabata"){ reps.disabled=true; reps.value=""; }
+    reps.onchange=()=>{ m.reps=Math.max(0,parseInt(reps.value,10)||0); markCustom(); saveDraft(); };
+    const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove "+MOVES[m.move].name);
+    del.onclick=()=>{ w.movements.splice(i,1); markCustom(); saveDraft(); renderBuilder(); };
+    const note=document.createElement("input"); note.type="text"; note.className="note"; note.placeholder = unitOf(m)==="reps" ? "Weight / standard, e.g. 20/14 lb" : `Note (the box holds ${unitOf(m)==="m"?"meters":"calories"})`;
+    note.value=m.note; note.maxLength=40; note.onchange=()=>{ m.note=note.value; saveDraft(); };
+    const badge=document.createElement("div"); badge.className="badge"; badge.textContent = unitOf(m)==="reps" ? (w.ladder.length && !m.reps ? "ladder" : (MOVES[m.move].ex?"cam":"tap")) : unitOf(m);
+    li.append(sel,reps,del,note,badge); ul.append(li);
+  });
+  if(!w.movements.length){ const li=document.createElement("li"); li.className="hint"; li.style.display="block"; li.textContent="No movements yet."; ul.append(li); }
+}
+$("wName").onchange=e=>{ state.wod.name=e.target.value.slice(0,40); markCustom(); saveDraft(); };
+document.querySelectorAll("#fmtSeg button").forEach(b=>b.onclick=()=>{ state.wod.format=b.dataset.v; state.wod=normalizeWod(state.wod); markCustom(); saveDraft(); renderBuilder(); });
+document.querySelectorAll("#scaleSeg button").forEach(b=>b.onclick=()=>{ state.wod.scale=b.dataset.v; saveDraft(); renderBuilder(); });
+$("addMove").onclick=()=>{ state.wod.movements.push({move:"burpee",reps:10,note:""}); markCustom(); saveDraft(); renderBuilder(); };
+$("parseBtn").onclick=()=>{
+  const {wod, unknown}=parseWod($("pasteBox").value);
+  if(!wod.movements.length){ $("parseHint").textContent="Couldn't find any movements in that. Try one movement per line, like \"15 wall balls\"."; return; }
+  wod.scale=state.wod.scale; wod.name = state.wod.name && state.presetIdx<0 ? state.wod.name : "Today's WOD";
+  state.wod=wod; markCustom(); saveDraft(); renderBuilder();
+  $("parseHint").textContent = `Read as ${describeWod(wod)} with ${wod.movements.length} movement${wod.movements.length>1?"s":""}.`+(unknown.length?` Skipped: ${unknown.join(" / ")}.`:" Check it below, then start.");
+};
+
+/* ---------- Running ---------- */
+let landmarker, stream, wakeLock, rafId;
+const video=$("video"), canvas=$("overlay"), ctx=canvas.getContext("2d");
+async function loadModel(){
+  if(landmarker) return;
+  const V="0.10.14";
+  const {FilesetResolver, PoseLandmarker} = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}/vision_bundle.mjs`);
+  const files = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}/wasm`);
+  const opts = d => ({ baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", delegate:d }, runningMode:"VIDEO", numPoses:1, minPoseDetectionConfidence:0.5, minTrackingConfidence:0.5 });
+  try{ landmarker = await PoseLandmarker.createFromOptions(files, opts("GPU")); }
+  catch(e){ landmarker = await PoseLandmarker.createFromOptions(files, opts("CPU")); }
+}
+async function startCamera(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: state.facing, width:{ideal:960}, height:{ideal:720} }, audio:false });
+  video.srcObject=stream; await video.play();
+  $("stage").classList.toggle("mirror", state.facing==="user"); $("stage").classList.remove("nocam");
+}
+async function keepAwake(){ try{ wakeLock = await navigator.wakeLock?.request("screen"); }catch(e){} }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && state.run) keepAwake(); });
+$("flipBtn").onclick=async()=>{ if(!state.camera) return toast("Camera is off in tap mode"); state.facing = state.facing==="user"?"environment":"user"; try{ await startCamera(); }catch(e){ toast("Couldn't switch cameras"); state.facing = state.facing==="user"?"environment":"user"; } };
+
+function primeSpeech(){ if("speechSynthesis" in window){ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u); } unlockAudio(); }
+async function begin(withCam){
+  const w=normalizeWod(state.wod); state.wod=w; saveDraft();
+  if(!w.movements.length){ showErr("Add at least one movement first."); return; }
+  primeSpeech();
+  const btn=withCam?$("startCam"):$("startTap"); $("err").hidden=true;
+  if(withCam){
+    btn.disabled=true; btn.textContent="Starting camera…";
+    try{
+      if(!navigator.mediaDevices?.getUserMedia) throw new Error("nocam");
+      await startCamera(); btn.textContent="Loading pose model…"; await loadModel(); state.camera=true;
+    }catch(e){
+      btn.disabled=false; btn.textContent="Start with camera";
+      showErr(e.message==="nocam" ? "This browser can't use the camera. Open the page in Safari or Chrome, or start without the camera."
+        : e.name==="NotAllowedError" ? "Camera access was blocked. Allow the camera for this site, or start without the camera and tap to count."
+        : "Couldn't start the camera: "+(e.message||e)+". You can still start without it.");
+      return;
+    }
+    btn.disabled=false; btn.textContent="Start with camera";
+  } else state.camera=false;
+  state.run=new WodRun(w); state.run.start(performance.now(), 10);
+  $("home").hidden=true; $("hud").hidden=false; $("tray").hidden=false;
+  setStatus(state.camera?"warn":"", state.camera?"Camera on":"Tap mode");
+  say(`${w.name}. ${describeWod(w).replace("·",",")}. First up, ${moveLine(state.run.current())}. Starting in ten.`);
+  keepAwake(); renderRun(); cancelAnimationFrame(rafId); rafId=requestAnimationFrame(loop);
+}
+function showErr(m){ const e=$("err"); e.textContent=m; e.hidden=false; }
+$("startCam").onclick=()=>begin(true);
+$("startTap").onclick=()=>begin(false);
+
+function syncCounterToMove(){
+  const m=state.run?.current();
+  const ex = state.camera && m && m.ex ? m.ex : null;
+  if(ex!==counter.key){ counter.setExercise(ex, state.strict); }
+  else counter.reset();
+}
+let lastVideoTime=-1;
+function loop(now){
+  const run=state.run; if(!run) return;
+  handle(run.tick(now), now);
+  if(state.camera && run.phase!=="done" && video.readyState>=2 && video.currentTime!==lastVideoTime){
+    lastVideoTime=video.currentTime;
+    const res=landmarker.detectForVideo(video, now); const lm=res.landmarks?.[0];
+    const out=counter.update(lm||null, now);
+    draw(lm);
+    if(counter.ex){
+      if(out.visible) setStatus(counter.armed?"ok":"warn", counter.armed?"Tracking "+counter.ex.name:"Get in start position");
+      else setStatus("bad","Step into frame");
+      for(const ev of counter.events){
+        if(ev.type==="rep" && !run.paused && run.phase==="running") handle(run.addReps(now,1), now);
+        else if(ev.type==="shallow") cue(counter.ex.tips.shallow);
+        else if(ev.type==="lockout") cue(counter.ex.tips.lock);
+      }
+    } else setStatus("warn","Tap to count");
+  }
+  renderRun(now);
+  rafId=requestAnimationFrame(loop);
+}
+function handle(events, now){
+  for(const ev of events){
+    if(ev.type==="beep") beep(ev.kind);
+    else if(ev.type==="say") say(ev.text,{interrupt:false});
+    else if(ev.type==="go") say("Go!");
+    else if(ev.type==="move"){ syncCounterToMove(); const f=state.run.wod.format; if(ev.move && state.run.phase==="running" && f!=="tabata" && !(f==="emom" && events.some(e=>e.type==="minute"))) say(moveLine(ev.move),{interrupt:false}); }
+    else if(ev.type==="rep"){
+      bump(); if(navigator.vibrate) navigator.vibrate(30);
+      let line = state.sayReps ? spoken(ev.n) : "";
+      if(ev.left===0) line = (line? line+". ":"")+"Done.";
+      else if(ev.left===3 && state.run.target()>=8) line += ". Three left.";
+      else if(ev.left===1 && state.run.target()>=5) line += ". Last one.";
+      if(line) say(line);
+    }
+    else if(ev.type==="round") say(`Round ${ev.n}.`,{interrupt:false});
+    else if(ev.type==="minute"){ const m=state.run.current(); say(`Minute ${ev.n}. ${moveLine(m)}.`); }
+    else if(ev.type==="set-done") say(`Done. Rest ${ev.rest} seconds.`,{interrupt:false});
+    else if(ev.type==="resting") toast("Resting until the next minute");
+    else if(ev.type==="interval"){ if(ev.kind==="rest") say("Rest.",{interrupt:false}); else say(ev.n===1? `Work. ${state.run.current().name}.` : "Work!",{interrupt:false}); }
+    else if(ev.type==="done") finish(ev);
+  }
+}
+function finish(ev){
+  const run=state.run, w=run.wod, sc=run.score();
+  say(ev.reason==="finished" ? `Time! ${sc.long}.` : ev.reason==="cap" ? `Time cap. ${sc.long}.` : `Time! ${sc.long}.`);
+  const res={at:Date.now(), name:w.name, desc:describeWod(w), scale:w.scale, score:sc.text, long:sc.long, moves:run.summary(), splits:run.splits.slice(), wod:w, note:""};
+  const hist=store.get("history",[]); hist.unshift(res); store.set("history", hist.slice(0,200));
+  state.lastResult=res; showResult(res);
+  renderRun(performance.now());
+}
+function showResult(res){
+  $("resTitle").textContent=res.name;
+  const sc=$("resScore"); sc.textContent=res.score; const s=document.createElement("small"); s.textContent=`${res.desc} · ${res.scale}`; sc.append(s);
+  const ul=$("resList"); ul.innerHTML="";
+  const add=(nm,rp,sub)=>{ const li=document.createElement("li"); const a=document.createElement("span"); a.className="nm"; a.textContent=nm; const b=document.createElement("span"); b.className="rp"; b.textContent=rp; li.append(a,b); if(sub){ const c=document.createElement("span"); c.className="sub"; c.textContent=sub; li.append(c);} ul.append(li); };
+  add(res.long,"");
+  res.moves.forEach(m=>add(m.name, m.total+UNIT_LABEL[m.unit], m.note));
+  if(res.splits.length>1) add("Round splits","", res.splits.map((t,i)=>fmtClock(t-(res.splits[i-1]||0))).join(" · "));
+  $("resNote").value=res.note||"";
+  $("resSheet").hidden=false;
+}
+function resultText(r){
+  return `${r.name} (${r.desc}) · ${r.scale}\n${r.long}\n`+r.moves.map(m=>`${m.name}: ${m.total}${UNIT_LABEL[m.unit]}${m.note?` @ ${m.note}`:""}`).join("\n")+(r.note?`\nNotes: ${r.note}`:"")+`\n${new Date(r.at).toLocaleDateString()}`;
+}
+$("resNote").onchange=e=>{ const r=state.lastResult; if(!r) return; r.note=e.target.value; const hist=store.get("history",[]); const h=hist.find(x=>x.at===r.at); if(h){ h.note=r.note; store.set("history",hist);} };
+$("resCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(resultText(state.lastResult)); toast("Copied"); }catch(e){ toast("Couldn't copy on this browser"); } };
+$("resDone").onclick=()=>{ $("resSheet").hidden=true; goHome(); };
+function goHome(){
+  state.run=null; cancelAnimationFrame(rafId); counter.setExercise(null);
+  $("hud").hidden=true; $("tray").hidden=true; $("home").hidden=false; ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } $("stage").classList.add("nocam");
+  try{ wakeLock?.release(); }catch(e){}
+}
+
+/* Tray */
+$("tapBtn").onclick=()=>{ const r=state.run; if(!r) return; if(r.phase==="countdown"){ toast("Wait for go"); return; }
+  const m=r.current(); handle(m && m.unit!=="reps" ? r.completeMovement(performance.now()) : r.addReps(performance.now(),1)); };
+$("minusBtn").onclick=()=>{ if(state.run?.undoRep()) renderRun(performance.now()); };
+$("doneBtn").onclick=()=>{ const r=state.run; if(!r || r.phase!=="running") return; if(r.wod.format==="tabata") return toast("Tabata moves on with the clock"); handle(r.completeMovement(performance.now())); };
+$("pauseBtn").onclick=()=>{ const r=state.run; if(!r) return; const t=performance.now(); if(r.paused){ r.resume(t); say("Back to it."); } else { r.pause(t); say("Paused."); } renderRun(t); };
+$("endBtn").onclick=()=>{
+  const b=$("endBtn"), r=state.run; if(!r) return;
+  if(r.phase==="done"){ showResult(state.lastResult); return; }
+  if(b.dataset.confirm){ delete b.dataset.confirm; b.textContent="End WOD";
+    if(r.phase==="countdown"){ goHome(); return; }
+    r.events=[]; r._finish("stopped", performance.now()); handle(r.events); }
+  else { b.dataset.confirm="1"; b.textContent="Tap again to end"; setTimeout(()=>{ if(b.dataset.confirm){ delete b.dataset.confirm; b.textContent="End WOD"; } },3000); }
+};
+
+function renderRun(now=performance.now()){
+  const r=state.run; if(!r) return;
+  const v=r.view(now), m=r.current(), w=r.wod;
+  $("clockT").textContent=v.clock; $("clockT").classList.toggle("hot", v.hot);
+  $("clockS").textContent = v.paused ? "Paused" : v.sub;
+  $("clock").className="clock"+(v.rest?" rest":"")+(v.phase==="countdown"?" countdown":"");
+  $("progFill").style.width=(v.progress*100)+"%";
+  const n=$("repNum");
+  if(v.phase==="done"){ n.textContent=r.score().text; $("mvName").textContent = r.reason==="finished" ? "Finished" : "Time"; $("mvNote").textContent=""; $("nextUp").textContent=""; }
+  else if(m){
+    const inRest = (w.format==="emom" && r.minuteDone) || (w.format==="tabata" && v.rest);
+    if(w.format==="tabata"){ n.textContent=r.reps; }
+    else if(m.unit!=="reps"){ n.innerHTML=""; n.append(document.createTextNode(m.target)); const s=document.createElement("small"); s.textContent=UNIT_LABEL[m.unit]; n.append(s); }
+    else { n.innerHTML=""; n.append(document.createTextNode(r.reps)); const s=document.createElement("small"); s.textContent="/"+m.target; n.append(s); }
+    $("mvName").textContent = inRest && w.format==="emom" ? "Rest" : m.name;
+    $("mvNote").textContent = [m.note, w.scale!=="Rx"?w.scale:""].filter(Boolean).join(" · ");
+    const nx=r.next();
+    $("nextUp").innerHTML=""; if(nx){ const s=document.createTextNode("Next: "); const b=document.createElement("b"); const mv=MOVES[nx.move], u=nx.unit||mv.unit; b.textContent = w.format==="tabata" ? mv.name : (u==="reps" ? `${nx.reps} ${mv.name}` : `${nx.reps}${UNIT_LABEL[u]} ${mv.name}`); $("nextUp").append(s,b); }
+  }
+  const unit=m?.unit||"reps";
+  $("tapBtn").textContent = unit==="reps" ? "+1 rep" : "Done "+(m?.name||"").toLowerCase();
+  $("doneBtn").hidden = unit!=="reps" || w.format==="tabata";
+  $("tapBtn").disabled = v.phase==="done";
+  $("pauseBtn").textContent = r.paused ? "Resume" : "Pause"; $("pauseBtn").disabled = v.phase==="done";
+  $("endBtn").textContent = v.phase==="done" ? "See result" : ($("endBtn").dataset.confirm ? "Tap again to end" : "End WOD");
+}
+function bump(){ const n=$("repNum"); n.classList.add("bump"); setTimeout(()=>n.classList.remove("bump"),180); }
+let toastT; function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2200); }
+let cueT; function cue(msg){ if(!state.cues) return; $("cue").textContent=msg; clearTimeout(cueT); cueT=setTimeout(()=>$("cue").textContent="",1800); say(msg,{interrupt:false}); }
+function setStatus(kind,text){ $("statusDot").className="dot "+kind; $("statusText").textContent=text; }
+
+const EDGES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function draw(lm){
+  const w=video.videoWidth, h=video.videoHeight;
+  if(canvas.width!==w){ canvas.width=w; canvas.height=h; }
+  ctx.clearRect(0,0,w,h);
+  if(!lm || !state.skel) return;
+  const hot=new Set(counter.ex?.joints ? counter.ex.joints.flat() : counter.ex?.metric ? [11,12,23,24] : []);
+  ctx.lineCap="round"; ctx.lineWidth=Math.max(3,w/160);
+  for(const [a,b] of EDGES){
+    if((lm[a].visibility??1)<0.4||(lm[b].visibility??1)<0.4) continue;
+    ctx.strokeStyle = hot.has(a)&&hot.has(b) ? "#e5483b" : "rgba(238,241,244,.75)";
+    ctx.beginPath(); ctx.moveTo(lm[a].x*w,lm[a].y*h); ctx.lineTo(lm[b].x*w,lm[b].y*h); ctx.stroke();
+  }
+}
+
+/* ---------- History + settings ---------- */
+function renderHist(){
+  const ul=$("histList"); ul.innerHTML=""; const hist=store.get("history",[]);
+  if(!hist.length){ const li=document.createElement("li"); li.className="empty"; li.style.background="none"; li.textContent="No workouts yet. Finish a WOD and your score shows up here."; ul.append(li); return; }
+  hist.slice(0,60).forEach(r=>{
+    const li=document.createElement("li");
+    const a=document.createElement("span"); a.className="nm"; a.textContent=r.name;
+    const b=document.createElement("span"); b.className="rp"; b.textContent=r.score;
+    const c=document.createElement("span"); c.className="sub"; c.textContent=`${new Date(r.at).toLocaleDateString([], {month:"short",day:"numeric"})} · ${r.desc} · ${r.scale}`+(r.note?` · ${r.note}`:"");
+    const row=document.createElement("div"); row.className="row"; row.style.gridColumn="1 / -1";
+    const again=document.createElement("button"); again.className="linkbtn"; again.textContent="Do it again"; again.onclick=()=>{ state.wod=normalizeWod(r.wod); markCustom(); saveDraft(); renderBuilder(); $("histSheet").hidden=true; toast("Loaded "+r.name); };
+    const cp=document.createElement("button"); cp.className="linkbtn"; cp.textContent="Copy"; cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(resultText(r)); toast("Copied"); }catch(e){ toast("Couldn't copy"); } };
+    row.append(again,cp); li.append(a,b,c,row); ul.append(li);
+  });
+}
+$("histBtn").onclick=()=>{ renderHist(); $("histSheet").hidden=false; };
+function syncSettings(){
+  document.querySelectorAll("#strictSeg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===state.strict)));
+  ["sayReps","beeps","cues","skel"].forEach(k=>$(k).checked=state[k]);
+  $("voiceWave").style.display=state.voice?"":"none"; $("voiceBtn").setAttribute("aria-label", state.voice?"Voice on":"Voice off");
+}
+$("setBtn").onclick=()=>{ syncSettings(); $("setSheet").hidden=false; };
+document.querySelectorAll("#strictSeg button").forEach(b=>b.onclick=()=>{ state.strict=b.dataset.v; store.set("strict",state.strict); counter.strict=state.strict; syncSettings(); });
+$("voiceSel").onchange=e=>{ state.voiceName=e.target.value; store.set("voiceName",state.voiceName); say("Three, two, one, go."); };
+["sayReps","beeps","cues","skel"].forEach(k=>$(k).onchange=e=>{ state[k]=e.target.checked; store.set(k,state[k]); });
+$("voiceBtn").onclick=()=>{ state.voice=!state.voice; store.set("voice",state.voice); syncSettings(); if(state.voice) say("Voice on"); else speechSynthesis.cancel(); };
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest(".sheet").hidden=true);
+document.querySelectorAll(".sheet").forEach(s=>s.addEventListener("click",e=>{ if(e.target===s && s.id!=="resSheet") s.hidden=true; }));
+
+renderPresets(); renderBuilder(); syncSettings();
+</script>
+</body>
+</html>
